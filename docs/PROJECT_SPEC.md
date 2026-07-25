@@ -1,4 +1,5 @@
 # SecureWealth AI
+
 ## AI-Powered Financial Safety and Decision Intelligence Platform
 
 Version: 1.0
@@ -202,6 +203,7 @@ The project will be considered successful when it can:
 - Support natural language financial conversations.
 - Produce downloadable financial reports.
 - Operate through a modern web dashboard.
+
 ---
 
 # PART 2 - SYSTEM ARCHITECTURE
@@ -2219,11 +2221,12 @@ The system contains specialized agents coordinated by an orchestration agent.
            Decision Coordinator Agent
           /        |         |        \
          ▼         ▼         ▼         ▼
- Fraud Investigator  Financial Advisor
- Report Generator    Goal Planner
-                      │
-                      ▼
-              Tool Execution Layer
+
+Fraud Investigator Financial Advisor
+Report Generator Goal Planner
+│
+▼
+Tool Execution Layer
 
 The Decision Coordinator Agent determines which specialist agent(s) should handle a request.
 
