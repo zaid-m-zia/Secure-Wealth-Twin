@@ -15,3 +15,15 @@ export async function uploadTransactions(file: File): Promise<{ rows_processed: 
   const response = await apiClient.post("/transactions/upload", form, { headers: { "Content-Type": "multipart/form-data" } });
   return response.data.data;
 }
+
+export async function createBankingTransaction(customerId: string, amount: number): Promise<Transaction> {
+  const now = new Date();
+  const response = await apiClient.post<ApiEnvelope<Transaction>>("/transactions", {
+    transaction_id: `bank-${crypto.randomUUID()}`,
+    customer_id: customerId,
+    transaction_date: now.toISOString().slice(0, 10),
+    transaction_time: now.toTimeString().slice(0, 8),
+    transaction_amount: amount,
+  });
+  return unwrap(response);
+}
