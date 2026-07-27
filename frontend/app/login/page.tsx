@@ -25,7 +25,8 @@ export default function LoginPage() {
     setError(null);
     try {
       await loginUser({ email, password });
-      router.push("/dashboard");
+      const nextPath = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("next");
+      router.push(nextPath?.startsWith("/") ? nextPath : "/dashboard");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to sign in right now.");
     } finally {
@@ -54,7 +55,7 @@ export default function LoginPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" required />
+                  <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" minLength={8} required />
                 </div>
                 {error ? <p className="text-sm text-destructive">{error}</p> : null}
                 <Button type="submit" className="w-full gap-2" disabled={loading}>

@@ -23,8 +23,10 @@ export interface TokenResponse {
   status: string;
   message: string;
   access_token: string;
+  refresh_token: string;
   token_type: string;
-  expires_in_seconds: number;
+  access_expires_in_seconds: number;
+  refresh_expires_in_seconds: number;
   profile: UserProfile;
   request_id: string;
 }

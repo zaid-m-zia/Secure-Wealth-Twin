@@ -9,7 +9,6 @@ class Base(DeclarativeBase):
 
     pass
 
-
 class TimestampMixin:
     @declared_attr
     def created_at(cls) -> Mapped[datetime]:

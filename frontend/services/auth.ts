@@ -1,22 +1,27 @@
 import { apiClient } from "@/services/api";
 import { LoginRequest, LogoutResponse, RegisterRequest, TokenResponse, UserProfile } from "@/types/auth";
-import { clearAccessToken, setAccessToken } from "@/utils/storage";
+import { clearAuthStorage, setAccessToken, setRefreshToken, setStoredProfile } from "@/utils/storage";
+
+function persistSession(response: TokenResponse): TokenResponse {
+  setAccessToken(response.access_token);
+  setRefreshToken(response.refresh_token);
+  setStoredProfile(response.profile);
+  return response;
+}
 
 export async function registerUser(payload: RegisterRequest): Promise<TokenResponse> {
   const response = await apiClient.post<TokenResponse>("/auth/register", payload);
-  setAccessToken(response.data.access_token);
-  return response.data;
+  return persistSession(response.data);
 }
 
 export async function loginUser(payload: LoginRequest): Promise<TokenResponse> {
   const response = await apiClient.post<TokenResponse>("/auth/login", payload);
-  setAccessToken(response.data.access_token);
-  return response.data;
+  return persistSession(response.data);
 }
 
 export async function logoutUser(): Promise<LogoutResponse> {
   const response = await apiClient.post<LogoutResponse>("/auth/logout");
-  clearAccessToken();
+  clearAuthStorage();
   return response.data;
 }
 

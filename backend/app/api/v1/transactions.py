@@ -69,6 +69,12 @@ def list_transactions(
 
 
 
+@router.get("/statistics", response_model=APIResponse)
+def transaction_statistics(service: TransactionService = Depends(get_transaction_service)) -> dict[str, object]:
+    data = service.get_statistics()
+    return build_api_response(status="success", message="Transaction statistics retrieved successfully.", data=data, request_id=get_request_id())
+
+
 @router.get("/{transaction_id}", response_model=APIResponse)
 def get_transaction(transaction_id: str, service: TransactionService = Depends(get_transaction_service)) -> dict[str, object]:
     transaction = service.get_transaction(transaction_id)
@@ -104,9 +110,3 @@ def delete_transaction(transaction_id: str, service: TransactionService = Depend
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return build_api_response(status="success", message="Transaction deleted successfully.", data={"transaction_id": transaction_id}, request_id=get_request_id())
-
-
-@router.get("/statistics", response_model=APIResponse)
-def transaction_statistics(service: TransactionService = Depends(get_transaction_service)) -> dict[str, object]:
-    data = service.get_statistics()
-    return build_api_response(status="success", message="Transaction statistics retrieved successfully.", data=data, request_id=get_request_id())

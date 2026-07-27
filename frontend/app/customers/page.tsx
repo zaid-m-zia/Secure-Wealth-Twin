@@ -1,0 +1,7 @@
+"use client";
+import { useEffect, useState } from "react";
+import { EmptyState, ErrorState, LoadingState } from "@/components/data-state";
+import { SecurePage } from "@/components/secure-page";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Customer, listCustomers } from "@/services/platform";
+export default function CustomersPage() { const [customers, setCustomers] = useState<Customer[] | null>(null); const [error, setError] = useState(""); useEffect(() => { listCustomers().then((result) => setCustomers(result.items)).catch(() => setError("Unable to retrieve customers.")); }, []); return <SecurePage title="Customers" description="Searchable customer records connected to the backend.">{error ? <ErrorState message={error}/> : customers === null ? <LoadingState/> : !customers.length ? <EmptyState title="No customers found" description="Create a customer through the API or import a supported transaction CSV."/> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{customers.map((customer) => <Card key={customer.customer_id}><CardHeader><CardTitle>{customer.customer_id}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground"><p>{customer.location ?? "Location unavailable"}</p><p className="mt-2">Balance: {customer.account_balance.toLocaleString()}</p><p className="mt-2">{customer.gender ?? "Gender unavailable"}</p></CardContent></Card>)}</div>}</SecurePage>; }

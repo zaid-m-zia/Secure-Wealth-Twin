@@ -5,22 +5,29 @@ import { usePathname } from "next/navigation";
 
 import {
   BarChart3,
+  BrainCircuit,
+  Building2,
   CircleDollarSign,
   LayoutDashboard,
   ShieldAlert,
   Sparkles,
   WalletCards,
+  ReceiptText,
+  Settings,
 } from "lucide-react";
 
 import { cn } from "@/utils/cn";
 
 const sidebarItems = [
-  { label: "Overview", href: "/dashboard#overview", icon: LayoutDashboard },
-  { label: "Spending", href: "/dashboard#spending", icon: CircleDollarSign },
-  { label: "Risk", href: "/dashboard#risk", icon: ShieldAlert },
-  { label: "Analytics", href: "/dashboard#analytics", icon: BarChart3 },
-  { label: "Recommendations", href: "/dashboard#recommendations", icon: Sparkles },
-  { label: "Accounts", href: "/dashboard#accounts", icon: WalletCards },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Customers", href: "/customers", icon: Building2 },
+  { label: "Transactions", href: "/transactions", icon: ReceiptText },
+  { label: "Fraud", href: "/fraud", icon: ShieldAlert },
+  { label: "Wealth Twin", href: "/wealth", icon: WalletCards },
+  { label: "Recommendations", href: "/recommendations", icon: Sparkles },
+  { label: "Agentic AI", href: "/agentic-ai", icon: BrainCircuit },
+  { label: "Analytics", href: "/analytics", icon: BarChart3 },
+  { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -36,14 +43,14 @@ export function Sidebar() {
           </div>
           <div>
             <p className="font-semibold">SecureWealth AI</p>
-            <p className="text-sm text-muted-foreground">Foundation scaffold</p>
+            <p className="text-sm text-muted-foreground">Financial intelligence</p>
           </div>
         </div>
       </div>
       <nav className="space-y-2">
         {sidebarItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === "/dashboard" && item.label === "Overview";
+          const active = pathname === item.href;
           return (
             <Link
               key={item.label}
@@ -60,9 +67,9 @@ export function Sidebar() {
         })}
       </nav>
       <div className="mt-auto rounded-3xl border border-border bg-muted/50 p-5">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Foundation</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Secure workspace</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          API, auth, UI shell, and deployment scaffolding are ready for the next build phase.
+          Live platform data is protected by your authenticated session.
         </p>
       </div>
     </aside>

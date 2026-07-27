@@ -59,7 +59,7 @@ export default function RegisterPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a strong password" required />
+                  <Input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Create a strong password" minLength={8} required />
                 </div>
                 {error ? <p className="text-sm text-destructive">{error}</p> : null}
                 <Button type="submit" className="w-full gap-2" disabled={loading}>
