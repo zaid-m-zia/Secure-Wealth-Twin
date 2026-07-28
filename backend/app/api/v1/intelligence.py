@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -5,6 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.dependencies import get_current_user, get_database_session
 from sqlalchemy.orm import Session
 from app.models.fraud import FraudAnalysis
+from app.models.digital_wealth_twin import DigitalWealthTwin
+from app.models.recommendation import Recommendation
+from app.models.agent_memory import AgentMemory
 from app.schemas.common import APIResponse
 from app.services.intelligence_service import IntelligenceService
 from app.utils.request_context import get_request_id
@@ -72,7 +76,10 @@ def fraud_analytics(customer_id: Optional[str] = None):
 
 @router.get("/wealth/{customer_id}", response_model=APIResponse)
 @router.get("/wealth/twin/{customer_id}", response_model=APIResponse)
-def wealth_twin(customer_id: str):
+def wealth_twin(customer_id: str, session: Session = Depends(get_database_session)):
+    runtime = session.get(DigitalWealthTwin, customer_id)
+    if runtime is not None and runtime.financial_dna_json:
+        return _response("Digital Wealth Twin retrieved successfully.", {**runtime.financial_dna_json, "financial_health_score": runtime.health_score_placeholder, "financial_personality": runtime.wealth_summary})
     return _response("Digital Wealth Twin retrieved successfully.", _required(service.wealth_twin(customer_id), "Digital Wealth Twin"))
 
 
@@ -87,7 +94,10 @@ def wealth_metrics(customer_id: str):
 @router.get("/recommendations/{customer_id}", response_model=APIResponse)
 @router.get("/recommendations/{customer_id}/ranking", response_model=APIResponse)
 @router.get("/recommendations/{customer_id}/explanations", response_model=APIResponse)
-def recommendations(customer_id: str):
+def recommendations(customer_id: str, session: Session = Depends(get_database_session)):
+    runtime = session.query(Recommendation).filter(Recommendation.customer_id == customer_id).order_by(Recommendation.updated_at.desc()).all()
+    if runtime:
+        return _response("Financial recommendations retrieved successfully.", [{"recommendation": item.recommendation_text, "priority": item.priority, "status": item.status} for item in runtime])
     return _response("Financial recommendations retrieved successfully.", service.recommendations(customer_id))
 
 
@@ -97,7 +107,10 @@ def recommendations(customer_id: str):
 @router.get("/agentic-ai/{customer_id}/confidence", response_model=APIResponse)
 @router.get("/agentic-ai/{customer_id}/evidence", response_model=APIResponse)
 @router.get("/agentic-ai/{customer_id}/risk", response_model=APIResponse)
-def agentic_decision(customer_id: str):
+def agentic_decision(customer_id: str, session: Session = Depends(get_database_session)):
+    runtime = session.query(AgentMemory).filter(AgentMemory.customer_id == customer_id).first()
+    if runtime is not None and runtime.conversation_memory:
+        return _response("Agentic AI decision retrieved successfully.", json.loads(runtime.conversation_memory))
     return _response("Agentic AI decision retrieved successfully.", _required(service.decision(customer_id), "agentic decision"))
 
 

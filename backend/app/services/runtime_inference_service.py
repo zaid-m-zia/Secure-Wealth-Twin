@@ -25,9 +25,25 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.models.behavior_profile import BehaviorProfile
 from app.models.fraud import FraudAnalysis
 from app.models.transaction import Transaction
+from app.models.digital_wealth_twin import DigitalWealthTwin
+from app.models.recommendation import Recommendation
+from app.models.agent_memory import AgentMemory
 from ml.fraud_intelligence.explainability import FraudExplainabilityEngine
 from ml.fraud_intelligence.risk_score import BehaviorDeviationCalculator, FraudScoreFusion, RiskLevelClassifier
 from ml.fraud_intelligence.rule_engine import RuleBasedFraudEngine
+from ml.digital_wealth_twin.savings_behavior import SavingsBehaviorAnalyzer
+from ml.digital_wealth_twin.wealth_metrics import WealthMetricsCalculator
+from ml.digital_wealth_twin.financial_health import FinancialHealthAnalyzer
+from ml.digital_wealth_twin.investment_readiness import InvestmentReadinessAnalyzer
+from ml.digital_wealth_twin.financial_personality import FinancialPersonalityAnalyzer
+from ml.financial_decision_intelligence.budgeting_engine import BudgetingEngine
+from ml.financial_decision_intelligence.savings_recommender import SavingsRecommender
+from ml.financial_decision_intelligence.investment_recommender import InvestmentRecommender
+from ml.financial_decision_intelligence.debt_optimizer import DebtOptimizer
+from ml.financial_decision_intelligence.financial_priority_engine import FinancialPriorityEngine
+from ml.financial_decision_intelligence.recommendation_ranker import RecommendationRanker
+from ml.financial_decision_intelligence.explanation_engine import DecisionExplanationEngine
+from ml.agentic_ai.engine import AgenticAIDecisionEngine
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[3] / "ml" / "artifacts"
 LOGGER = logging.getLogger(__name__)
@@ -112,4 +128,30 @@ class RuntimeInferenceService:
             profile.last_updated = datetime.now(timezone.utc)
         self.session.commit()
         self.session.refresh(analysis)
+        self.refresh_customer_intelligence(transaction.customer_id)
         return analysis
+
+    def refresh_customer_intelligence(self, customer_id: str) -> None:
+        """Apply existing deterministic intelligence components to current DB state only."""
+        transactions = self.session.execute(select(Transaction).where(Transaction.customer_id == customer_id)).scalars().all()
+        account = transactions[0].customer if transactions else None
+        if account is None:
+            return
+        amounts = np.array([item.transaction_amount for item in transactions], dtype=float)
+        scores = [item.fraud_score_placeholder or 0.0 for item in self.session.execute(select(FraudAnalysis).where(FraudAnalysis.customer_id == customer_id)).scalars().all()]
+        monthly = float(amounts.sum())
+        state = pd.DataFrame([{"customer_id": customer_id, "average_account_balance": account.account_balance, "average_monthly_spending": monthly, "income_stability_score": 1.0 / (1.0 + float(amounts.std()) / max(float(amounts.mean()), 1.0)), "spending_consistency": 1.0 / (1.0 + float(amounts.std()) / max(float(amounts.mean()), 1.0)), "transaction_regularity": min(len(transactions) / 30.0, 1.0), "balance_utilisation": min(monthly / max(account.account_balance, 1.0), 1.0), "expense_ratio": min(monthly / max(account.account_balance + monthly, 1.0), 1.0), "debt_pressure_estimate": 0.0, "spending_capacity": max(account.account_balance - monthly, 0.0), "spending_volatility_index": min(float(amounts.std()) / max(float(amounts.mean()), 1.0), 1.0), "weekend_transaction_share": sum(item.transaction_date.weekday() >= 5 for item in transactions) / max(len(transactions), 1), "customer_avg_fraud_score": float(np.mean(scores)) if scores else 0.0, "agentic_average_fraud_score": float(np.mean(scores)) if scores else 0.0, "agentic_maximum_fraud_score": max(scores, default=0.0), "agentic_flagged_transactions": sum(score >= 31 for score in scores), "behaviour_profile": "Stable"}])
+        for component in (SavingsBehaviorAnalyzer(), WealthMetricsCalculator(), FinancialHealthAnalyzer(), InvestmentReadinessAnalyzer()):
+            state = state.merge(component.build(state), on="customer_id", how="left")
+        personality = FinancialPersonalityAnalyzer().build(state).iloc[0]["financial_personality"]
+        twin = self.session.get(DigitalWealthTwin, customer_id) or DigitalWealthTwin(customer_id=customer_id)
+        self.session.add(twin); twin.health_score_placeholder = float(state.iloc[0]["financial_health_score"]); twin.financial_dna_json = {key: float(value) for key, value in state.iloc[0].items() if isinstance(value, (int, float, np.number))}; twin.wealth_summary = f"{personality} financial profile"
+        drafts = BudgetingEngine().recommend(state.iloc[0]) + SavingsRecommender().recommend(state.iloc[0]) + InvestmentRecommender().recommend(state.iloc[0]) + DebtOptimizer().recommend(state.iloc[0])
+        ranked = RecommendationRanker().rank(FinancialPriorityEngine().prioritize(drafts))
+        self.session.query(Recommendation).filter(Recommendation.customer_id == customer_id).delete()
+        for draft in ranked:
+            item = DecisionExplanationEngine().finalize(draft); self.session.add(Recommendation(customer_id=customer_id, recommendation_text=item["explanation"], priority=item["priority"], status="active"))
+        agent = AgenticAIDecisionEngine(); decision = agent._build_decision(state.iloc[0], datetime.now(timezone.utc).isoformat())
+        memory = self.session.query(AgentMemory).filter(AgentMemory.customer_id == customer_id).first() or AgentMemory(customer_id=customer_id)
+        self.session.add(memory); memory.summary = decision["final_decision"]; memory.conversation_memory = json.dumps(decision)
+        self.session.commit()
