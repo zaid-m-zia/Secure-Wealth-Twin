@@ -2,7 +2,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_database_session
+from sqlalchemy.orm import Session
+from app.models.fraud import FraudAnalysis
 from app.schemas.common import APIResponse
 from app.services.intelligence_service import IntelligenceService
 from app.utils.request_context import get_request_id
@@ -44,7 +46,16 @@ def behavioral_intelligence(customer_id: str):
 
 @router.get("/fraud/score/{transaction_id}", response_model=APIResponse)
 @router.get("/fraud/explanation/{transaction_id}", response_model=APIResponse)
-def fraud_score(transaction_id: str):
+def fraud_score(transaction_id: str, session: Session = Depends(get_database_session)):
+    runtime = session.query(FraudAnalysis).filter(FraudAnalysis.transaction_id == transaction_id).order_by(FraudAnalysis.updated_at.desc()).first()
+    if runtime is not None and runtime.fraud_score_placeholder is not None:
+        return _response("Fraud analysis retrieved successfully.", {
+            "transaction_id": transaction_id,
+            "fraud_score": runtime.fraud_score_placeholder,
+            "risk_level": runtime.anomaly_reason_placeholder,
+            "explanation": runtime.explanation_placeholder,
+            "evidence": runtime.evidence_json or {},
+        })
     return _response("Fraud analysis retrieved successfully.", _required(service.fraud_score(transaction_id), "fraud analysis"))
 
 

@@ -20,12 +20,12 @@ import { cn } from "@/utils/cn";
 
 const sidebarItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Customers", href: "/customers", icon: Building2 },
-  { label: "Transactions", href: "/transactions", icon: ReceiptText },
-  { label: "Fraud", href: "/fraud", icon: ShieldAlert },
-  { label: "Wealth Twin", href: "/wealth", icon: WalletCards },
+  { label: "Accounts", href: "/customers", icon: Building2 },
+  { label: "Money", href: "/transactions", icon: ReceiptText },
+  { label: "Security", href: "/fraud", icon: ShieldAlert },
+  { label: "Financial Health", href: "/wealth", icon: WalletCards },
   { label: "Recommendations", href: "/recommendations", icon: Sparkles },
-  { label: "Agentic AI", href: "/agentic-ai", icon: BrainCircuit },
+  { label: "Assistant", href: "/agentic-ai", icon: BrainCircuit },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];

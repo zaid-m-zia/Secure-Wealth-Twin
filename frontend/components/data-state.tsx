@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-export function LoadingState({ label = "Loading data…" }: { label?: string }) { return <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">{label}</CardContent></Card>; }
+export function LoadingState({ label = "Loading your banking information…" }: { label?: string }) { return <Card><CardContent className="animate-pulse py-12 text-center text-sm text-muted-foreground">{label}</CardContent></Card>; }
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) { return <Card><CardHeader><CardTitle>{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader>{action ? <CardContent>{action}</CardContent> : null}</Card>; }
-export function ErrorState({ message }: { message: string }) { return <Card className="border-destructive/30"><CardContent className="py-8 text-sm text-destructive">{message}</CardContent></Card>; }
+export function ErrorState({ message = "Unable to contact the banking service. Please try again.", onRetry }: { message?: string; onRetry?: () => void }) { return <Card className="border-destructive/30"><CardContent className="flex flex-col gap-4 py-8 text-sm text-destructive"><span>{message}</span>{onRetry ? <button type="button" onClick={onRetry} className="w-fit rounded-xl border border-destructive/30 px-4 py-2 font-medium">Try again</button> : null}</CardContent></Card>; }

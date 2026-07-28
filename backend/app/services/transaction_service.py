@@ -9,6 +9,7 @@ from app.models.transaction import Transaction
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
+from app.services.runtime_inference_service import RuntimeInferenceService
 
 
 class TransactionService:
@@ -37,6 +38,7 @@ class TransactionService:
         )
         self.session.commit()
         self.session.refresh(transaction)
+        RuntimeInferenceService(self.session).assess_transaction(transaction)
         return transaction
 
     def get_transaction(self, transaction_id: str) -> Optional[Transaction]:
