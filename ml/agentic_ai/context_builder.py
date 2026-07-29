@@ -92,3 +92,4 @@ class UnifiedCustomerContextBuilder:
                 )
             records.append({"customer_id": customer_id, "agentic_recommendations": actions})
         return pd.DataFrame(records)
+

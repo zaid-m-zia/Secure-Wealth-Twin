@@ -10,13 +10,11 @@ from app.models.digital_wealth_twin import DigitalWealthTwin
 from app.models.recommendation import Recommendation
 from app.models.agent_memory import AgentMemory
 from app.schemas.common import APIResponse
-from app.services.intelligence_service import IntelligenceService
 from app.services.runtime_state_service import RuntimeStateService
 from app.utils.request_context import get_request_id
 from app.utils.responses import build_api_response
 
 router = APIRouter(tags=["intelligence"], dependencies=[Depends(get_current_user)])
-service = IntelligenceService()
 
 
 def _response(message: str, data: object) -> dict[str, object]:
@@ -29,24 +27,44 @@ def _required(data: object, label: str) -> object:
     return data
 
 
+def _runtime_intelligence(customer_id: str, session: Session) -> dict[str, object]:
+    runtime = RuntimeStateService(session)
+    dashboard_data = _required(runtime.dashboard(customer_id), "intelligence profile")
+    assert isinstance(dashboard_data, dict)
+    return {
+        "customer_id": customer_id,
+        "behavior": dashboard_data["behavior"],
+        "behavioral_intelligence": dashboard_data["behavior"],
+        "wealth_twin": runtime.wealth_analytics(customer_id),
+        "recommendations": dashboard_data["recommendations"],
+        "agentic_decision": dashboard_data["decision"],
+        "fraud_summary": runtime.fraud_analytics(customer_id),
+        "transaction_analytics": runtime.transaction_analytics(customer_id),
+    }
+
+
 @router.get("/customers/{customer_id}/profile", response_model=APIResponse)
-def customer_profile(customer_id: str):
-    return _response("Customer intelligence profile retrieved successfully.", _required(service.customer_intelligence(customer_id), "intelligence profile"))
+def customer_profile(customer_id: str, session: Session = Depends(get_database_session)):
+    return _response("Customer intelligence profile retrieved successfully.", _runtime_intelligence(customer_id, session))
 
 
 @router.get("/customers/{customer_id}/intelligence", response_model=APIResponse)
-def customer_intelligence(customer_id: str):
-    return _response("Customer intelligence retrieved successfully.", _required(service.customer_intelligence(customer_id), "intelligence profile"))
+def customer_intelligence(customer_id: str, session: Session = Depends(get_database_session)):
+    return _response("Customer intelligence retrieved successfully.", _runtime_intelligence(customer_id, session))
 
 
 @router.get("/behavior/{customer_id}", response_model=APIResponse)
-def behavior(customer_id: str):
-    return _response("Customer behavior retrieved successfully.", _required(service.customer_behavior(customer_id), "behavior profile"))
+def behavior(customer_id: str, session: Session = Depends(get_database_session)):
+    dashboard_data = _required(RuntimeStateService(session).dashboard(customer_id), "behavior profile")
+    assert isinstance(dashboard_data, dict)
+    return _response("Customer behavior retrieved successfully.", dashboard_data["behavior"])
 
 
 @router.get("/behavioral-intelligence/{customer_id}", response_model=APIResponse)
-def behavioral_intelligence(customer_id: str):
-    return _response("Behavioral intelligence retrieved successfully.", _required(service.behavioral_intelligence(customer_id), "behavioral intelligence"))
+def behavioral_intelligence(customer_id: str, session: Session = Depends(get_database_session)):
+    dashboard_data = _required(RuntimeStateService(session).dashboard(customer_id), "behavioral intelligence")
+    assert isinstance(dashboard_data, dict)
+    return _response("Behavioral intelligence retrieved successfully.", dashboard_data["behavior"])
 
 
 @router.get("/fraud/score/{transaction_id}", response_model=APIResponse)
@@ -148,5 +166,8 @@ def analytics_recommendations(customer_id: Optional[str] = None, session: Sessio
 
 
 @router.get("/reports/{customer_id}", response_model=APIResponse)
-def report(customer_id: str):
-    return _response("Structured report retrieved successfully.", _required(service.report(customer_id), "report"))
+def report(customer_id: str, session: Session = Depends(get_database_session)):
+    return _response(
+        "Structured report retrieved successfully.",
+        {**_runtime_intelligence(customer_id, session), "report_format": "structured_json_v1"},
+    )

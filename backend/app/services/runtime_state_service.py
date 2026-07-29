@@ -105,10 +105,11 @@ class RuntimeStateService:
             customer = self.session.get(Customer, customer_id)
             twin = self.session.get(DigitalWealthTwin, customer_id)
             if customer is None:
-                return {"customer_id": customer_id, "financial_health_score": None, "wealth_score": None, "financial_personality": None}
+                return {"customer_id": customer_id, "account_balance": None, "financial_health_score": None, "wealth_score": None, "financial_personality": None}
             financial_dna = twin.financial_dna_json if twin and twin.financial_dna_json else {}
             return {
                 "customer_id": customer_id,
+                "account_balance": customer.account_balance,
                 "financial_health_score": twin.health_score_placeholder if twin else None,
                 "wealth_score": financial_dna.get("wealth_score"),
                 "financial_personality": twin.wealth_summary if twin else None,
@@ -133,8 +134,10 @@ class RuntimeStateService:
         income = sum(transaction.transaction_amount for transaction in transactions if transaction.transaction_type in income_types)
         expenses = sum(transaction.transaction_amount for transaction in transactions if transaction.transaction_type not in income_types)
         amounts = [transaction.transaction_amount for transaction in transactions]
+        customer = self.session.get(Customer, customer_id) if customer_id else None
         return {
             "customer_id": customer_id,
+            "account_balance": customer.account_balance if customer else None,
             "transactions": len(transactions),
             "total_transaction_amount": round(sum(amounts), 2),
             "average_transaction_amount": round(sum(amounts) / len(amounts), 2) if amounts else 0.0,

@@ -1,5 +1,5 @@
 import { apiClient } from "@/services/api";
-import { LoginRequest, LogoutResponse, RegisterRequest, TokenResponse, UserProfile } from "@/types/auth";
+import { CurrentUser, LoginRequest, LogoutResponse, RegisterRequest, TokenResponse } from "@/types/auth";
 import { clearAuthStorage, setAccessToken, setRefreshToken, setStoredProfile } from "@/utils/storage";
 
 function persistSession(response: TokenResponse): TokenResponse {
@@ -25,7 +25,7 @@ export async function logoutUser(): Promise<LogoutResponse> {
   return response.data;
 }
 
-export async function fetchProfile(): Promise<UserProfile> {
-  const response = await apiClient.get<UserProfile>("/auth/profile");
+export async function fetchProfile(): Promise<CurrentUser> {
+  const response = await apiClient.get<CurrentUser>("/auth/profile");
   return response.data;
 }
