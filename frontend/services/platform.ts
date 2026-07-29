@@ -2,7 +2,7 @@ import { apiClient } from "@/services/api";
 import { ApiEnvelope } from "@/types/api";
 
 export interface Customer { customer_id: string; dob: string | null; gender: string | null; location: string | null; account_balance: number; }
-export interface Transaction { transaction_id: string; customer_id: string; transaction_date: string; transaction_time: string; transaction_amount: number; }
+export interface Transaction { transaction_id: string; customer_id: string; transaction_date: string; transaction_time: string; transaction_amount: number; transaction_type: string; category: string; merchant: string | null; status: string; }
 export interface PageResult<T> { items: T[]; meta: { total: number; page: number; page_size: number; total_pages: number }; }
 
 function unwrap<T>(response: { data: ApiEnvelope<T> }): T { return response.data.data; }
@@ -16,7 +16,7 @@ export async function uploadTransactions(file: File): Promise<{ rows_processed: 
   return response.data.data;
 }
 
-export async function createBankingTransaction(customerId: string, amount: number): Promise<Transaction> {
+export async function createBankingTransaction(customerId: string, amount: number, details: Pick<Transaction, "transaction_type" | "category" | "merchant">): Promise<Transaction> {
   const now = new Date();
   const response = await apiClient.post<ApiEnvelope<Transaction>>("/transactions", {
     transaction_id: `bank-${crypto.randomUUID()}`,
@@ -24,6 +24,10 @@ export async function createBankingTransaction(customerId: string, amount: numbe
     transaction_date: now.toISOString().slice(0, 10),
     transaction_time: now.toTimeString().slice(0, 8),
     transaction_amount: amount,
+    ...details,
+    status: "completed",
   });
-  return unwrap(response);
+  const transaction = unwrap(response);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("securewealth:runtime-updated"));
+  return transaction;
 }

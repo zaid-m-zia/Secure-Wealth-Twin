@@ -11,6 +11,7 @@ from app.models.recommendation import Recommendation
 from app.models.agent_memory import AgentMemory
 from app.schemas.common import APIResponse
 from app.services.intelligence_service import IntelligenceService
+from app.services.runtime_state_service import RuntimeStateService
 from app.utils.request_context import get_request_id
 from app.utils.responses import build_api_response
 
@@ -60,18 +61,19 @@ def fraud_score(transaction_id: str, session: Session = Depends(get_database_ses
             "explanation": runtime.explanation_placeholder,
             "evidence": runtime.evidence_json or {},
         })
-    return _response("Fraud analysis retrieved successfully.", _required(service.fraud_score(transaction_id), "fraud analysis"))
+    raise HTTPException(status_code=404, detail="No persisted fraud analysis was found for this transaction.")
 
 
 @router.get("/fraud/history/{customer_id}", response_model=APIResponse)
-def fraud_history(customer_id: str):
-    return _response("Fraud history retrieved successfully.", service.fraud_history(customer_id))
+def fraud_history(customer_id: str, session: Session = Depends(get_database_session)):
+    analyses = session.query(FraudAnalysis).filter(FraudAnalysis.customer_id == customer_id).order_by(FraudAnalysis.updated_at.desc()).all()
+    return _response("Fraud history retrieved successfully.", [{"transaction_id": item.transaction_id, "fraud_score": item.fraud_score_placeholder, "risk_level": item.anomaly_reason_placeholder, "explanation": item.explanation_placeholder, "evidence": item.evidence_json or {}} for item in analyses])
 
 
 @router.get("/fraud/analytics", response_model=APIResponse)
 @router.get("/fraud/risk-summary/{customer_id}", response_model=APIResponse)
-def fraud_analytics(customer_id: Optional[str] = None):
-    return _response("Fraud analytics retrieved successfully.", service.fraud_analytics(customer_id))
+def fraud_analytics(customer_id: Optional[str] = None, session: Session = Depends(get_database_session)):
+    return _response("Fraud analytics retrieved successfully.", RuntimeStateService(session).fraud_analytics(customer_id))
 
 
 @router.get("/wealth/{customer_id}", response_model=APIResponse)
@@ -80,15 +82,15 @@ def wealth_twin(customer_id: str, session: Session = Depends(get_database_sessio
     runtime = session.get(DigitalWealthTwin, customer_id)
     if runtime is not None and runtime.financial_dna_json:
         return _response("Digital Wealth Twin retrieved successfully.", {**runtime.financial_dna_json, "financial_health_score": runtime.health_score_placeholder, "financial_personality": runtime.wealth_summary})
-    return _response("Digital Wealth Twin retrieved successfully.", _required(service.wealth_twin(customer_id), "Digital Wealth Twin"))
+    return _response("Digital Wealth Twin retrieved successfully.", _required(RuntimeStateService(session).wealth_analytics(customer_id), "Digital Wealth Twin"))
 
 
 @router.get("/wealth/{customer_id}/health", response_model=APIResponse)
 @router.get("/wealth/{customer_id}/lifestyle", response_model=APIResponse)
 @router.get("/wealth/{customer_id}/personality", response_model=APIResponse)
 @router.get("/wealth/{customer_id}/metrics", response_model=APIResponse)
-def wealth_metrics(customer_id: str):
-    return _response("Digital Wealth Twin metrics retrieved successfully.", _required(service.wealth_twin(customer_id), "Digital Wealth Twin"))
+def wealth_metrics(customer_id: str, session: Session = Depends(get_database_session)):
+    return _response("Digital Wealth Twin metrics retrieved successfully.", _required(RuntimeStateService(session).wealth_analytics(customer_id), "Digital Wealth Twin"))
 
 
 @router.get("/recommendations/{customer_id}", response_model=APIResponse)
@@ -98,7 +100,7 @@ def recommendations(customer_id: str, session: Session = Depends(get_database_se
     runtime = session.query(Recommendation).filter(Recommendation.customer_id == customer_id).order_by(Recommendation.updated_at.desc()).all()
     if runtime:
         return _response("Financial recommendations retrieved successfully.", [{"recommendation": item.recommendation_text, "priority": item.priority, "status": item.status} for item in runtime])
-    return _response("Financial recommendations retrieved successfully.", service.recommendations(customer_id))
+    return _response("Financial recommendations retrieved successfully.", [])
 
 
 @router.get("/agentic-ai/{customer_id}", response_model=APIResponse)
@@ -111,38 +113,38 @@ def agentic_decision(customer_id: str, session: Session = Depends(get_database_s
     runtime = session.query(AgentMemory).filter(AgentMemory.customer_id == customer_id).first()
     if runtime is not None and runtime.conversation_memory:
         return _response("Agentic AI decision retrieved successfully.", json.loads(runtime.conversation_memory))
-    return _response("Agentic AI decision retrieved successfully.", _required(service.decision(customer_id), "agentic decision"))
+    raise HTTPException(status_code=404, detail="No persisted agent decision was found for this account.")
 
 
 @router.get("/dashboard/{customer_id}", response_model=APIResponse)
 @router.get("/dashboard/{customer_id}/overview", response_model=APIResponse)
-def dashboard(customer_id: str):
-    return _response("Dashboard overview retrieved successfully.", _required(service.dashboard(customer_id), "dashboard data"))
+def dashboard(customer_id: str, session: Session = Depends(get_database_session)):
+    return _response("Dashboard overview retrieved successfully.", _required(RuntimeStateService(session).dashboard(customer_id), "dashboard data"))
 
 
 @router.get("/analytics/behavior", response_model=APIResponse)
-def behavior_analytics():
-    return _response("Behavior analytics retrieved successfully.", service.behavior_analytics())
+def behavior_analytics(customer_id: Optional[str] = None, session: Session = Depends(get_database_session)):
+    return _response("Behavior analytics retrieved successfully.", RuntimeStateService(session).behavior_analytics(customer_id))
 
 
 @router.get("/analytics/fraud", response_model=APIResponse)
-def analytics_fraud():
-    return _response("Fraud analytics retrieved successfully.", service.fraud_analytics())
+def analytics_fraud(customer_id: Optional[str] = None, session: Session = Depends(get_database_session)):
+    return _response("Fraud analytics retrieved successfully.", RuntimeStateService(session).fraud_analytics(customer_id))
 
 
 @router.get("/analytics/wealth", response_model=APIResponse)
-def analytics_wealth():
-    return _response("Wealth analytics retrieved successfully.", service.wealth_analytics())
+def analytics_wealth(customer_id: Optional[str] = None, session: Session = Depends(get_database_session)):
+    return _response("Wealth analytics retrieved successfully.", RuntimeStateService(session).wealth_analytics(customer_id))
 
 
 @router.get("/analytics/transactions", response_model=APIResponse)
-def analytics_transactions():
-    return _response("Transaction analytics retrieved successfully.", service.transaction_analytics())
+def analytics_transactions(customer_id: Optional[str] = None, session: Session = Depends(get_database_session)):
+    return _response("Transaction analytics retrieved successfully.", RuntimeStateService(session).transaction_analytics(customer_id))
 
 
 @router.get("/analytics/recommendations", response_model=APIResponse)
-def analytics_recommendations():
-    return _response("Recommendation analytics retrieved successfully.", service.recommendation_analytics())
+def analytics_recommendations(customer_id: Optional[str] = None, session: Session = Depends(get_database_session)):
+    return _response("Recommendation analytics retrieved successfully.", RuntimeStateService(session).recommendation_analytics(customer_id))
 
 
 @router.get("/reports/{customer_id}", response_model=APIResponse)

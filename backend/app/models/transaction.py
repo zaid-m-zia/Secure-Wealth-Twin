@@ -14,6 +14,12 @@ class Transaction(TimestampMixin, Base):
     transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
     transaction_time: Mapped[time] = mapped_column(Time, nullable=False)
     transaction_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    # These fields are part of the banking record, rather than UI-only labels.
+    # They allow balances and all downstream intelligence to reason about cashflow.
+    transaction_type: Mapped[str] = mapped_column(String(32), nullable=False, default="legacy")
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general")
+    merchant: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="completed")
 
     customer = relationship("Customer", back_populates="transactions")
     fraud_analyses = relationship("FraudAnalysis", back_populates="transaction", cascade="all, delete-orphan")

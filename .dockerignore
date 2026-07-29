@@ -1,0 +1,9 @@
+.git
+.next
+node_modules
+__pycache__
+*.py[cod]
+.pytest_cache
+.env
+ml/artifacts/*
+!ml/artifacts/fraud_model.pkl

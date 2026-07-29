@@ -26,16 +26,7 @@ class TransactionService:
 
         transaction = Transaction(**payload.model_dump())
         self.repository.add(transaction)
-        self.session.add(
-            FraudAnalysis(
-                customer_id=payload.customer_id,
-                transaction_id=payload.transaction_id,
-                fraud_score_placeholder=None,
-                anomaly_reason_placeholder="Placeholder analysis pending future fraud engine.",
-                explanation_placeholder="Fraud analysis is deferred until the ML build phase.",
-                evidence_json={"foundation_placeholder": True},
-            )
-        )
+        self._apply_balance(payload.customer_id, transaction.transaction_type, transaction.transaction_amount)
         self.session.commit()
         self.session.refresh(transaction)
         RuntimeInferenceService(self.session).assess_transaction(transaction)
@@ -74,19 +65,32 @@ class TransactionService:
         if "customer_id" in update_data and self.customer_repository.get_by_customer_id(update_data["customer_id"]) is None:
             raise KeyError("Customer not found.")
 
+        previous_customer_id = transaction.customer_id
+        previous_type, previous_amount = transaction.transaction_type, transaction.transaction_amount
+        # Reverse the original posted movement before applying its replacement.
+        self._apply_balance(previous_customer_id, previous_type, previous_amount, reverse=True)
         for field_name, field_value in update_data.items():
             setattr(transaction, field_name, field_value)
 
+        self._apply_balance(transaction.customer_id, transaction.transaction_type, transaction.transaction_amount)
+
         self.session.commit()
         self.session.refresh(transaction)
+        runtime = RuntimeInferenceService(self.session)
+        runtime.assess_transaction(transaction)
+        if previous_customer_id != transaction.customer_id:
+            runtime.refresh_customer_intelligence(previous_customer_id)
         return transaction
 
     def delete_transaction(self, transaction_id: str) -> None:
         transaction = self.repository.get_by_transaction_id(transaction_id)
         if transaction is None:
             raise KeyError("Transaction not found.")
+        customer_id = transaction.customer_id
+        self._apply_balance(customer_id, transaction.transaction_type, transaction.transaction_amount, reverse=True)
         self.repository.delete(transaction)
         self.session.commit()
+        RuntimeInferenceService(self.session).refresh_customer_intelligence(customer_id)
 
     def get_statistics(self) -> dict[str, Any]:
         total, total_amount, average_amount = self.session.execute(
@@ -101,3 +105,16 @@ class TransactionService:
             "total_transaction_amount": float(total_amount),
             "average_transaction_amount": round(float(average_amount), 2),
         }
+
+    @staticmethod
+    def _is_credit(transaction_type: str) -> bool:
+        return transaction_type in {"deposit", "salary", "income", "refund"}
+
+    def _apply_balance(self, customer_id: str, transaction_type: str, amount: float, *, reverse: bool = False) -> None:
+        customer = self.customer_repository.get_by_customer_id(customer_id)
+        if customer is None:
+            raise KeyError("Customer not found.")
+        if transaction_type == "legacy":
+            return
+        delta = float(amount) if self._is_credit(transaction_type) else -float(amount)
+        customer.account_balance += -delta if reverse else delta

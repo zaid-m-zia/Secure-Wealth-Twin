@@ -17,6 +17,7 @@ from app.models.transaction import Transaction
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.schemas.upload import ImportSummary
+from app.services.runtime_inference_service import RuntimeInferenceService
 
 EXPECTED_HEADERS = {
     "TransactionID",
@@ -61,6 +62,7 @@ class UploadService:
         processed = 0
         seen_transaction_ids: set[str] = set()
         customer_cache: dict[str, Customer] = {}
+        created_transactions: list[Transaction] = []
 
         for row in reader:
             processed += 1
@@ -102,19 +104,22 @@ class UploadService:
                 transactions_skipped += 1
                 continue
 
-            self.session.add(
-                Transaction(
-                    transaction_id=transaction_id,
-                    customer_id=customer_id,
-                    transaction_date=self._parse_date(row["TransactionDate"]),
-                    transaction_time=self._parse_time(row["TransactionTime"]),
-                    transaction_amount=float(row["TransactionAmount (INR)"]),
-                )
+            transaction = Transaction(
+                transaction_id=transaction_id,
+                customer_id=customer_id,
+                transaction_date=self._parse_date(row["TransactionDate"]),
+                transaction_time=self._parse_time(row["TransactionTime"]),
+                transaction_amount=float(row["TransactionAmount (INR)"]),
             )
+            self.session.add(transaction)
+            created_transactions.append(transaction)
             seen_transaction_ids.add(transaction_id)
             transactions_created += 1
 
         self.session.commit()
+        runtime = RuntimeInferenceService(self.session)
+        for transaction in created_transactions:
+            runtime.assess_transaction(transaction)
         return ImportSummary(
             customers_created=customers_created,
             customers_updated=customers_updated,

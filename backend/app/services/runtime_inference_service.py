@@ -74,7 +74,8 @@ class RuntimeInferenceService:
 
     def assess_transaction(self, transaction: Transaction) -> FraudAnalysis:
         history = self.session.execute(select(Transaction).where(Transaction.customer_id == transaction.customer_id)).scalars().all()
-        amounts = [item.transaction_amount for item in history]
+        income_types = {"deposit", "salary", "income", "refund"}
+        amounts = [item.transaction_amount for item in history if item.transaction_type not in income_types] or [transaction.transaction_amount]
         baseline = float(np.mean(amounts)) if amounts else transaction.transaction_amount
         standard_deviation = float(np.std(amounts)) if len(amounts) > 1 else 0.0
         balance = float(transaction.customer.account_balance) if transaction.customer else 0.0
@@ -83,12 +84,12 @@ class RuntimeInferenceService:
             "transaction_id": transaction.transaction_id, "transaction_amount": transaction.transaction_amount,
             "average_transaction_amount": baseline, "std_transaction_amount": standard_deviation,
             "transaction_hour": hour, "transaction_balance_ratio": transaction.transaction_amount / max(balance, 1.0),
-            "balance_after_transaction": balance - transaction.transaction_amount,
+            "balance_after_transaction": balance - (0 if transaction.transaction_type in income_types else transaction.transaction_amount),
             "weekend_flag": int(transaction.transaction_date.weekday() >= 5),
             "large_transaction_flag": int(transaction.transaction_amount > baseline * 2),
             "very_large_transaction_flag": int(transaction.transaction_amount > baseline * 4),
-            "rapid_transaction_flag": 0, "low_balance_flag": int(balance <= transaction.transaction_amount),
-            "high_spending_flag": int(transaction.transaction_amount > baseline * 2),
+            "rapid_transaction_flag": 0, "low_balance_flag": int(transaction.transaction_type not in income_types and balance <= transaction.transaction_amount),
+            "high_spending_flag": int(transaction.transaction_type not in income_types and transaction.transaction_amount > baseline * 2),
             "new_customer_flag": int(len(history) <= 2), "dormant_customer_flag": 0,
         }])
         model_payload = load_fraud_model()
@@ -116,6 +117,8 @@ class RuntimeInferenceService:
         if analysis is None:
             analysis = FraudAnalysis(customer_id=transaction.customer_id, transaction_id=transaction.transaction_id)
             self.session.add(analysis)
+        else:
+            analysis.customer_id = transaction.customer_id
         analysis.fraud_score_placeholder = round(score, 2)
         analysis.anomaly_reason_placeholder = str(explanation["risk_level"])
         analysis.explanation_placeholder = str(explanation["fraud_explanation"])
@@ -136,11 +139,16 @@ class RuntimeInferenceService:
         transactions = self.session.execute(select(Transaction).where(Transaction.customer_id == customer_id)).scalars().all()
         account = transactions[0].customer if transactions else None
         if account is None:
+            self._clear_customer_intelligence(customer_id)
             return
-        amounts = np.array([item.transaction_amount for item in transactions], dtype=float)
+        income_types = {"deposit", "salary", "income", "refund"}
+        expenses = np.array([item.transaction_amount for item in transactions if item.transaction_type not in income_types], dtype=float)
+        income = np.array([item.transaction_amount for item in transactions if item.transaction_type in income_types], dtype=float)
+        amounts = expenses if len(expenses) else np.array([0.0])
         scores = [item.fraud_score_placeholder or 0.0 for item in self.session.execute(select(FraudAnalysis).where(FraudAnalysis.customer_id == customer_id)).scalars().all()]
-        monthly = float(amounts.sum())
-        state = pd.DataFrame([{"customer_id": customer_id, "average_account_balance": account.account_balance, "average_monthly_spending": monthly, "income_stability_score": 1.0 / (1.0 + float(amounts.std()) / max(float(amounts.mean()), 1.0)), "spending_consistency": 1.0 / (1.0 + float(amounts.std()) / max(float(amounts.mean()), 1.0)), "transaction_regularity": min(len(transactions) / 30.0, 1.0), "balance_utilisation": min(monthly / max(account.account_balance, 1.0), 1.0), "expense_ratio": min(monthly / max(account.account_balance + monthly, 1.0), 1.0), "debt_pressure_estimate": 0.0, "spending_capacity": max(account.account_balance - monthly, 0.0), "spending_volatility_index": min(float(amounts.std()) / max(float(amounts.mean()), 1.0), 1.0), "weekend_transaction_share": sum(item.transaction_date.weekday() >= 5 for item in transactions) / max(len(transactions), 1), "customer_avg_fraud_score": float(np.mean(scores)) if scores else 0.0, "agentic_average_fraud_score": float(np.mean(scores)) if scores else 0.0, "agentic_maximum_fraud_score": max(scores, default=0.0), "agentic_flagged_transactions": sum(score >= 31 for score in scores), "behaviour_profile": "Stable"}])
+        monthly, monthly_income = float(expenses.sum()), float(income.sum())
+        income_stability = 1.0 / (1.0 + float(income.std()) / max(float(income.mean()), 1.0)) if len(income) else 0.0
+        state = pd.DataFrame([{"customer_id": customer_id, "average_account_balance": account.account_balance, "average_monthly_spending": monthly, "monthly_income": monthly_income, "income_stability_score": income_stability, "spending_consistency": 1.0 / (1.0 + float(amounts.std()) / max(float(amounts.mean()), 1.0)), "transaction_regularity": min(len(transactions) / 30.0, 1.0), "balance_utilisation": min(monthly / max(account.account_balance, 1.0), 1.0), "expense_ratio": min(monthly / max(monthly_income, 1.0), 1.0), "debt_pressure_estimate": 0.0, "spending_capacity": max(account.account_balance - monthly, 0.0), "spending_volatility_index": min(float(amounts.std()) / max(float(amounts.mean()), 1.0), 1.0), "weekend_transaction_share": sum(item.transaction_date.weekday() >= 5 for item in transactions) / max(len(transactions), 1), "customer_avg_fraud_score": float(np.mean(scores)) if scores else 0.0, "agentic_average_fraud_score": float(np.mean(scores)) if scores else 0.0, "agentic_maximum_fraud_score": max(scores, default=0.0), "agentic_flagged_transactions": sum(score >= 31 for score in scores), "behaviour_profile": "Stable"}])
         for component in (SavingsBehaviorAnalyzer(), WealthMetricsCalculator(), FinancialHealthAnalyzer(), InvestmentReadinessAnalyzer()):
             state = state.merge(component.build(state), on="customer_id", how="left")
         personality = FinancialPersonalityAnalyzer().build(state).iloc[0]["financial_personality"]
@@ -154,4 +162,25 @@ class RuntimeInferenceService:
         agent = AgenticAIDecisionEngine(); decision = agent._build_decision(state.iloc[0], datetime.now(timezone.utc).isoformat())
         memory = self.session.query(AgentMemory).filter(AgentMemory.customer_id == customer_id).first() or AgentMemory(customer_id=customer_id)
         self.session.add(memory); memory.summary = decision["final_decision"]; memory.conversation_memory = json.dumps(decision)
+        self.session.commit()
+
+    def _clear_customer_intelligence(self, customer_id: str) -> None:
+        """Remove derived state when its source transaction history no longer exists."""
+        profile = self.session.get(BehaviorProfile, customer_id)
+        if profile is not None:
+            profile.avg_transaction_amount = None
+            profile.transaction_frequency = None
+            profile.spending_pattern_json = None
+            profile.risk_flags_json = None
+            profile.last_updated = None
+        twin = self.session.get(DigitalWealthTwin, customer_id)
+        if twin is not None:
+            twin.financial_dna_json = None
+            twin.wealth_summary = None
+            twin.health_score_placeholder = None
+        self.session.query(Recommendation).filter(Recommendation.customer_id == customer_id).delete()
+        memory = self.session.query(AgentMemory).filter(AgentMemory.customer_id == customer_id).first()
+        if memory is not None:
+            memory.summary = None
+            memory.conversation_memory = None
         self.session.commit()

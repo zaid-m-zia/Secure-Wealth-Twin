@@ -10,6 +10,10 @@ class TransactionBase(BaseModel):
     transaction_date: date
     transaction_time: time
     transaction_amount: float = Field(ge=0)
+    transaction_type: str = Field(default="legacy", max_length=32)
+    category: str = Field(default="general", max_length=64)
+    merchant: Optional[str] = Field(default=None, max_length=120)
+    status: str = Field(default="completed", max_length=32)
 
 
 class TransactionCreate(TransactionBase):
@@ -21,6 +25,10 @@ class TransactionUpdate(BaseModel):
     transaction_date: Optional[date] = None
     transaction_time: Optional[time] = None
     transaction_amount: Optional[float] = Field(default=None, ge=0)
+    transaction_type: Optional[str] = Field(default=None, max_length=32)
+    category: Optional[str] = Field(default=None, max_length=64)
+    merchant: Optional[str] = Field(default=None, max_length=120)
+    status: Optional[str] = Field(default=None, max_length=32)
 
 
 class TransactionRead(TransactionBase):
